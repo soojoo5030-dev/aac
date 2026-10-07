@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>맞춤형 AAC 의사소통 보드</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap');
+        
+        body {
+            font-family: 'Nanum Gothic', sans-serif;
+            background-color: #FFFBF0; /* 편안한 아이보리 계열 배경 */
+            margin: 0;
+            padding: 0;
+            /* 더블 탭 확대 방지 */
+            touch-action: manipulation; 
+            /* 텍스트 드래그 선택 방지 */
+            user-select: none; 
+            -webkit-user-select: none;
+        }
+
+        /* 카드 기본 스타일 및 인터랙션 (눌렀을 때 축소) */
+        .aac-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            /* 그림자와 둥근 모서리로 부드러운 느낌 강조 */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border: 4px solid transparent;
+        }
+        
+        /* 학생 모드: 눌렀을 때 반응 */
+        body:not(.edit-mode) .aac-card:active {
+            transform: scale(0.95);
+            border-color: #4ADE80; /* 눌렀을 때 연두색 테두리 피드백 */
+            background-color: #F0FDF4;
+        }
+
+        /* 선생님 편집 모드 활성화 시 카드 스타일 변경 */
+        body.edit-mode .aac-card {
+            border: 4px dashed #9CA3AF; /* 점선 테두리로 수정 가능함 표시 */
+            cursor: pointer;
+        }
+        
+        body.edit-mode .aac-card:hover {
+            border-color: #3B82F6;
+            background-color: #EFF6FF;
+        }
+        
+        /* 편집 모드일 때만 보이는 수정 아이콘 */
+        .edit-icon {
+            display: none;
+        }
+        body.edit-mode .edit-icon {
+            display: block;
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            color: #6B7280;
+        }
+
+        /* 긴 텍스트 자동 줄바꿈 최적화 */
+        .word-keep {
+            word-break: keep-all;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- 상단 헤더 영역 (제목 및 편집 토글 버튼) -->
+    <header class="flex justify-between items-center p-4 md:p-6 bg-white/50 backdrop-blur-sm sticky top-0 z-10 shadow-sm">
+        <h1 class="text-2xl md:text-3xl font-extrabold text-gray-800 flex items-center gap-2">
+            <span>🗣️</span> 나의 이야기 보드
+        </h1>
+        
+        <!-- 선생님 편집 모드 토글 스위치 -->
+        <button id="editToggleBtn" onclick="toggleEditMode()" 
+                class="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-full font-bold transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            <span id="editModeText">선생님 편집 끄기</span>
+        </button>
+    </header>
+
+    <!-- 메인 AAC 카드 그리드 영역 (모바일 2열, 데스크탑 3열) -->
+    <main class="flex-grow p-4 md:p-8">
+        <div id="boardContainer" class="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-8 h-full min-h-[70vh]">
+            <!-- 카드가 자바스크립트를 통해 동적으로 여기에 렌더링됩니다. -->
+        </div>
+    </main>
+
+    <!-- 선생님 편집용 모달 창 (기본 숨김) -->
+    <div id="editModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl transform transition-all">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-4">카드 내용 수정하기</h2>
+            
+            <div class="space-y-6">
+                <!-- 이모지 입력 -->
+                <div>
+                    <label class="block text-gray-700 font-bold mb-2 text-lg">그림(이모지)</label>
+                    <input type="text" id="emojiInput" 
+                           class="w-full text-4xl p-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 text-center"
+                           placeholder="😀" maxlength="2">
+                    <p class="text-sm text-gray-500 mt-2">* 윈도우 키 + 마침표(.)를 눌러 이모지를 넣을 수 있습니다.</p>
+                </div>
+
+                <!-- 텍스트 입력 -->
+                <div>
+                    <label class="block text-gray-700 font-bold mb-2 text-lg">읽어줄 문장</label>
+                    <input type="text" id="textInput" 
+                           class="w-full text-xl md:text-2xl p-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 font-bold"
+                           placeholder="학생이 하고 싶은 말">
+                </div>
+            </div>
+
+            <!-- 저장/취소 버튼 -->
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeEditModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl text-lg transition-colors">
+                    취소
+                </button>
+                <button onclick="saveCardEdit()" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-2xl text-lg shadow-md transition-colors">
+                    저장하기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Web Speech API 초기화
+        const synth = window.speechSynthesis;
+        let isEditMode = false;
+        let currentEditId = null;
+
+        // 기본 제공 카드 데이터 (LocalStorage에 없을 경우 사용)
+        const defaultCards = [
+            { id: 1, text: "화장실 가고 싶어요", emoji: "🚽" },
+            { id: 2, text: "물 마실래요", emoji: "💧" },
+            { id: 3, text: "도와주세요", emoji: "🙋‍♂️" },
+            { id: 4, text: "쉬고 싶어요", emoji: "🛋️" },
+            { id: 5, text: "네", emoji: "⭕" },
+            { id: 6, text: "아니요", emoji: "❌" }
+        ];
+
+        // 상태 데이터 (초기화)
+        let cardsData = [];
+
+        // 데이터 불러오기
+        function loadData() {
+            const savedData = localStorage.getItem('aac_board_data');
+            if (savedData) {
+                cardsData = JSON.parse(savedData);
+            } else {
+                // 저장된 데이터가 없으면 기본값 복사
+                cardsData = JSON.parse(JSON.stringify(defaultCards));
+            }
+        }
+
+        // 보드 화면에 렌더링하기
+        function renderBoard() {
+            const container = document.getElementById('boardContainer');
+            container.innerHTML = ''; // 기존 내용 비우기
+
+            cardsData.forEach(card => {
+                // 카드 요소 생성
+                const cardDiv = document.createElement('div');
+                cardDiv.className = 'aac-card bg-white rounded-3xl flex flex-col justify-center items-center p-4 md:p-8 cursor-pointer relative min-h-[200px] md:min-h-[250px]';
+                // 클릭 이벤트 연결
+                cardDiv.onclick = () => handleCardClick(card);
+
+                // 편집 모드 표시용 연필 아이콘 (SVG)
+                const editIcon = `
+                    <svg class="edit-icon w-8 h-8 md:w-10 md:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                    </svg>`;
+
+                cardDiv.innerHTML = `
+                    ${editIcon}
+                    <div class="text-7xl md:text-8xl lg:text-9xl mb-4 md:mb-6 pointer-events-none">${card.emoji}</div>
+                    <div class="text-2xl md:text-4xl font-extrabold text-gray-800 text-center word-keep pointer-events-none leading-snug">
+                        ${card.text}
+                    </div>
+                `;
+                
+                container.appendChild(cardDiv);
+            });
+        }
+
+        // 카드 클릭 핸들러 (모드에 따라 분기)
+        function handleCardClick(card) {
+            if (isEditMode) {
+                // 편집 모드일 때는 모달 창 열기
+                openEditModal(card);
+            } else {
+                // 학생 모드일 때는 음성 출력
+                speakText(card.text);
+            }
+        }
+
+        // 텍스트 음성 출력 (TTS)
+        function speakText(text) {
+            // 재생 중인 다른 음성이 있다면 즉시 취소하여 겹침 방지
+            if (synth.speaking) {
+                synth.cancel();
+            }
+
+            if (text !== '') {
+                const utterThis = new SpeechSynthesisUtterance(text);
+                
+                // 음성 설정 (한국어, 또렷하고 친근하게)
+                utterThis.lang = 'ko-KR';
+                utterThis.pitch = 1.1; 
+                utterThis.rate = 0.9;
+                
+                synth.speak(utterThis);
+            }
+        }
+
+        // 편집 모드 켜기/끄기 토글
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            const body = document.body;
+            const btnText = document.getElementById('editModeText');
+            const toggleBtn = document.getElementById('editToggleBtn');
+
+            if (isEditMode) {
+                body.classList.add('edit-mode');
+                btnText.textContent = "편집 완료 (저장)";
+                toggleBtn.classList.replace('bg-gray-200', 'bg-blue-100');
+                toggleBtn.classList.replace('text-gray-700', 'text-blue-700');
+            } else {
+                body.classList.remove('edit-mode');
+                btnText.textContent = "선생님 편집 켜기";
+                toggleBtn.classList.replace('bg-blue-100', 'bg-gray-200');
+                toggleBtn.classList.replace('text-blue-700', 'text-gray-700');
+            }
+        }
+
+        // 모달 창 열기
+        function openEditModal(card) {
+            currentEditId = card.id;
+            
+            // 모달 입력창에 기존 데이터 채우기
+            document.getElementById('emojiInput').value = card.emoji;
+            document.getElementById('textInput').value = card.text;
+            
+            // 모달 보이기
+            document.getElementById('editModal').classList.remove('hidden');
+            
+            // 텍스트 인풋에 포커스
+            setTimeout(() => document.getElementById('textInput').focus(), 100);
+        }
+
+        // 모달 창 닫기
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+            currentEditId = null;
+        }
+
+        // 수정한 카드 내용 저장
+        function saveCardEdit() {
+            if (currentEditId === null) return;
+
+            const newEmoji = document.getElementById('emojiInput').value.trim();
+            const newText = document.getElementById('textInput').value.trim();
+
+            if (!newText) {
+                // 경고창 대신 시각적 효과 부여로 대체 (금지어 alert 방지)
+                const textInput = document.getElementById('textInput');
+                textInput.classList.add('border-red-500');
+                setTimeout(() => textInput.classList.remove('border-red-500'), 1000);
+                return;
+            }
+
+            // 데이터 업데이트
+            const cardIndex = cardsData.findIndex(c => c.id === currentEditId);
+            if (cardIndex !== -1) {
+                cardsData[cardIndex].emoji = newEmoji || "💬"; // 이모지 비어있으면 기본값
+                cardsData[cardIndex].text = newText;
+            }
+
+            // LocalStorage에 저장
+            localStorage.setItem('aac_board_data', JSON.stringify(cardsData));
+
+            // 화면 다시 그리기 및 모달 닫기
+            renderBoard();
+            closeEditModal();
+        }
+
+        // 앱 초기화 실행
+        loadData();
+        renderBoard();
+        
+        // 처음엔 선생님 편집 끄기 텍스트로 초기화
+        document.getElementById('editModeText').textContent = "선생님 편집 켜기";
+    </script>
+</body>
+</html>
